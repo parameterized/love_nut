@@ -10,7 +10,6 @@ client:connect('localhost', 1357)
 server:addRPCs{
   chat_msg = function(self, data, clientid)
     self:sendRPC('chat_msg', data)
-    print(self.clients[clientid])
   end
 }
 
