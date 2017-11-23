@@ -15,30 +15,30 @@ client = nut.client()
 client:connect('localhost', 1357)
 
 server:addRPCs{
-	chat_msg = function(self, t, clientid)
-		self:send{cmd='chat_msg', val=t.val}
-		print(self.clients[clientid])
-	end
+  chat_msg = function(self, t, clientid)
+    self:send{cmd='chat_msg', val=t.val}
+    print(self.clients[clientid])
+  end
 }
 
 client:addRPCs{
-	chat_msg = function(self, t)
-		chat = chat .. t.val .. '\n'
-	end
+  chat_msg = function(self, t)
+    chat = chat .. t.val .. '\n'
+  end
 }
 
 function love.update(dt)
-	server:update(dt)
-	client:update(dt)
+  server:update(dt)
+  client:update(dt)
 end
 
 function love.keypressed(k)
-	if k == 'space' then
-		client:send{cmd='chat_msg', val='message'}
-	end
+  if k == 'space' then
+    client:send{cmd='chat_msg', val='message'}
+  end
 end
 
 function love.draw()
-	love.graphics.print(chat, 20, 20)
+  love.graphics.print(chat, 20, 20)
 end
 ```
