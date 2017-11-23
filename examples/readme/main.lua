@@ -1,13 +1,5 @@
-# LoveNUT
-Love2D Networking (UDP/TCP) (tcp in progress)
+package.path = '../../?.lua;love_nut/?.lua;' .. package.path
 
-Lua networking library designed for Love2D games
-
-*Supports Love 0.10.2*
-
-## Simple functional example
-
-```lua
 local nut = require 'love_nut'
 
 chat = '--Chat:\n'
@@ -40,4 +32,3 @@ end
 function love.draw()
   love.graphics.print(chat, 20, 20)
 end
-```

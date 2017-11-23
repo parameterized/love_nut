@@ -1,10 +1,6 @@
 
 local socket = require 'socket'
 
-local _PACKAGE = string.gsub(...,"%.","/") or ""
-if string.len(_PACKAGE) > 0 then _PACKAGE = _PACKAGE .. "/" end
-local json = require(_PACKAGE .. 'json')
-
 local nut = {}
 
 local server = {}
@@ -50,14 +46,10 @@ function server:update(dt)
 			if data then
 				print('server received: ' .. data)
 				local clientid = msg_or_ip .. ':' .. tostring(port_or_nil)
-				local dg
-				if pcall(function() dg = json.decode(data) end) then
-					local rpc = self.rpc[dg.cmd]
-					if rpc then
-						rpc(self, dg, clientid)
-					end
-				else
-					print('error decoding')
+				local cmd, cmdParams = data:match('^(%S*) (.*)$')
+				local rpc = self.rpc[cmd]
+				if rpc then
+					rpc(self, cmdParams, clientid)
 				end
 			elseif not (msg_or_ip == 'timeout') then 
 				print('Network error: ' .. tostring(msg_or_ip))
@@ -66,19 +58,15 @@ function server:update(dt)
 	end
 end
 
-function server:send(dg, clientid)
-	if type(dg) == 'table' then
-		if not pcall(function() dg = json.encode(dg) end) then
-			print('error encoding')
-			return false
-		end
-	end
+function server:sendRPC(cmd, cmdParams, clientid)
+	cmdParams = cmdParams or '$'
+	local dg = cmd .. ' ' .. cmdParams
 	if clientid then
 		local ip, port = clientid:match("^(.-):(%d+)$")
 		self.udp:sendto(dg, ip, tonumber(port))
 	else
 		for clientid, _ in pairs(self.clients) do
-			print('send2: ' .. clientid)
+			print('in send all')
 			local ip, port = clientid:match("^(.-):(%d+)$")
 			self.udp:sendto(dg, ip, tonumber(port))
 		end
@@ -106,7 +94,7 @@ end
 function client:connect(ip, port)
 	print('connecting to ' .. ip .. ':' .. tostring(port))
 	self.udp:setpeername(ip, port)
-	return self.udp:send(json.encode{cmd='connect'})
+	return self:sendRPC('connect')
 end
 
 function client:addRPCs(t)
@@ -122,14 +110,11 @@ function client:update(dt)
 		repeat
 			local data, msg = self.udp:receive()
 			if data then
-				local dg
-				if pcall(function() dg = json.decode(data) end) then
-					local rpc = self.rpc[dg.cmd]
-					if rpc then
-						rpc(self, dg)
-					end
-				else
-					print('error decoding')
+				print('client received: ' .. data)
+				local cmd, cmdParams = data:match('^(%S*) (.*)$')
+				local rpc = self.rpc[cmd]
+				if rpc then
+					rpc(self, cmdParams)
 				end
 			elseif not (msg == 'timeout') then 
 				print('Network error: ' .. tostring(msg))
@@ -138,13 +123,9 @@ function client:update(dt)
 	end
 end
 
-function client:send(dg)
-	if type(dg) == 'table' then
-		if not pcall(function() dg = json.encode(dg) end) then
-			print('error encoding')
-			return false
-		end
-	end
+function client:sendRPC(cmd, cmdParams)
+	cmdParams = cmdParams or '$'
+	local dg = cmd .. ' ' .. cmdParams
 	return self.udp:send(dg)
 end
 

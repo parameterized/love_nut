@@ -1,3 +1,4 @@
+package.path = '../../?.lua;love_nut/?.lua;' .. package.path
 
 nut = require 'love_nut'
 
@@ -15,28 +16,28 @@ fonts = {
 }
 
 nut.server:addRPCs{
-	chat_msg = function(self, t, clientid)
-		self:send{cmd='chat_msg', val=t.val}
-		print(self.clients[clientid])
+	chat_msg = function(self, data, clientid)
+		self:sendRPC('chat_msg', data)
 	end,
 	-- override connect/disconnect
-	connect = function(self, t, clientid)
+	connect = function(self, data, clientid)
+		print('hit connect')
 		print(clientid .. ' connected')
 		self.clients[clientid] = {}
-		self:send{cmd='chat_msg', val=clientid .. ' connected'}
+		self:sendRPC('chat_msg', clientid .. ' connected')
 	end,
-	disconnect = function(self, t, clientid)
+	disconnect = function(self, data, clientid)
 		print(clientid .. ' disconnected')
 		self.clients[clientid] = nil
-		self:send{cmd='chat_msg', val=clientid .. ' disconnected'}
+		self:sendRPC('chat_msg', clientid .. ' disconnected')
 	end
 }
 
 nut.client:addRPCs{
-	chat_msg = function(self, t)
-		chat = chat .. t.val .. '\n'
+	chat_msg = function(self, data)
+		chat = chat .. data .. '\n'
 	end,
-	closed = function(self, t)
+	closed = function(self, data)
 		chat = chat .. 'Server Closed'
 	end
 }
@@ -73,8 +74,7 @@ function love.keypressed(k, scancode, isrepeat)
 		if client then
 			typing = not typing
 			if not typing then
-				--send message
-				client:send{cmd='chat_msg', val=message}
+				client:sendRPC('chat_msg', message)
 				message = ''
 			end
 		end
@@ -130,9 +130,9 @@ end
 
 function love.quit()
 	if client then
-		client:send{cmd='disconnect'}
+		client:sendRPC('disconnect')
 	end
 	if server then
-		server:send{cmd='closed'}
+		server:sendRPC('closed')
 	end
 end
