@@ -4,7 +4,7 @@ Love2D Networking (UDP/TCP)
 
 Lua networking library designed for Love2D games (not exclusively, should work on anything with LuaSocket)
 
-*LoveNUT version: 0.1.0*
+*LoveNUT version: 0.1.0*<br>
 *Supports Love2D 11.1.0*
 
 ## Example usage
