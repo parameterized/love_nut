@@ -4,7 +4,8 @@ Love2D Networking (UDP/TCP)
 
 Lua networking library designed for Love2D games (not exclusively, should work on anything with LuaSocket)
 
-*Supports Love 11.1.0*
+*LoveNUT version: 0.1.0*
+*Supports Love2D 11.1.0*
 
 ## Example usage
 ```lua
@@ -12,6 +13,7 @@ local nut = require 'love_nut'
 
 chat = '--Chat:\n'
 server = nut.server{port=1357}
+server:start()
 client = nut.client()
 client:connect('127.0.0.1', 1357)
 
@@ -51,6 +53,7 @@ end
 	* [Properties][nut-properties]
 		* [logMessages][nut-properties-logMessages]
 		* [logErrors][nut-properties-logErrors]
+		* [\_VERSION][nut-properties-VERSION]
 	* [Methods][nut-methods]
 		* [log][nut-methods-log]
 		* [logError][nut-methods-logError]
@@ -83,29 +86,33 @@ nut = require 'love_nut'
 ```
 
 ### <a id="nut-properties"/> Properties
-<a id="nut-properties-logMessages">logMessages</a>
-**default: false**
+#### <a id="nut-properties-logMessages">.logMessages</a>
+**default: false**<br>
 display logged messages
 
-<a id="nut-properties-logErrors">logErrors</a>
-**default: true**
+#### <a id="nut-properties-logErrors">.logErrors</a>
+**default: true**<br>
 display logged errors
 
+#### <a id="nut-properties-VERSION">.\_VERSION</a>
+**"LoveNUT 0.1.0"**<br>
+constant with current LoveNUT version
+
 ### <a id="nut-methods"/> Methods
-<a id="nut-methods-log">.log(msg)</a>
+#### <a id="nut-methods-log">.log(msg)</a>
 log a normal message
 ```lua
 nut.log('message')
 ```
 
-<a id="nut-methods-logError">.logError(err)</a>
+#### <a id="nut-methods-logError">.logError(err)</a>
 log an error message
 ```lua
 nut.log('error')
 ```
 
-<a id="nut-methods-getIP">.getIP()</a>
-get (local) ip (should return public the future)
+#### <a id="nut-methods-getIP">.getIP()</a>
+get (local) ip (should return public in the future)
 ```lua
 ip = nut.getIP()
 ```
@@ -119,23 +126,23 @@ client = nut.client{updateRate=1/20}
 ```
 
 ### <a id="client-properties"/> Properties
-<a id="client-properties-updateRate">updateRate</a>
-default: 1/20
+#### <a id="client-properties-updateRate">updateRate</a>
+**default: 1/20**<br>
 set client update rate
 
-<a id="client-properties-rpcs">rpcs</a>
-default: {}
+#### <a id="client-properties-rpcs">rpcs</a>
+**default: {}**<br>
 table of rpcs - use :addRPCs(t)
 
 ### <a id="client-methods"/> Methods
-<a id="client-methods-connect">:connect(ip, port)</a>
+#### <a id="client-methods-connect">:connect(ip, port)</a>
 connect to a server
 ```lua
 client:connect(ip, port)
 ```
 
-<a id="client-methods-addRPCs">:addRPCs(t)</a>
-add remote procedure call functions
+#### <a id="client-methods-addRPCs">:addRPCs(t)</a>
+add or override remote procedure call functions
 ```lua
 client:addRPCs{
   rpc_name = function(self, data)
@@ -144,33 +151,105 @@ client:addRPCs{
 }
 ```
 
-:connect(ip, port)
-:addRPCs(t)
-:update(dt)
-:sendRPC(cmd, cmdParams)
-:close()
+#### <a id="client-methods-update">:update(dt)</a>
+check for and handle messages if last update was > updateRate seconds ago
+```lua
+client:update(deltaTime)
+```
+
+#### <a id="client-methods-sendRPC">:sendRPC(name, data)</a>
+send remote procedure call to server<br>
+data will have `\r` and `\n` removed (used as message delimiter) - may change in future version
+```lua
+client:sendRPC('chat_msg', 'hello')
+```
+
+#### <a id="client-methods-close">:close()</a>
+send disconnect rpc to server and close client sockets
+```lua
+client:close()
+```
 
 ## <a id="server"/> Server
-`server = nut.server{port=1357}`
-`server = nut.server{port=1357, updateRate=1/20}`
+```lua
+server = nut.server()
+```
+```lua
+server = nut.server{port=1357, updateRate=1/20}
+```
 
 ### <a id="server-properties"/> Properties
-port - 1357 (set when creating server)
-updateRate - 1/20
-rpcs - {}
+#### <a id="server-properties-port">port</a>
+**default: 1357**<br>
+port to run on - set before starting server or when creating
+
+#### <a id="server-properties-updateRate">updateRate</a>
+**default: 1/20**<br>
+set client update rate
+
+#### <a id="server-properties-rpcs">rpcs</a>
+**default:**<br>
+```lua
+{
+    disconnect = function(self, data, clientId)
+        self.clients[clientId] = nil
+        nut.log(clientId .. ' disconnected')
+    end
+}
+```
+table of rpcs - use :addRPCs(t)
 
 ### <a id="server-methods"/> Methods
-:addRPCs(t)
-:accept()
-:update(dt)
-:sendRPC(cmd, cmdParams, clientId)
-:close()
+#### <a id="server-methods-start">:start()</a>
+start server
+```lua
+server:start()
+```
+
+#### <a id="server-methods-accept">:accept()</a>
+check for and accept a client connection (called in update)
+```lua
+server:accept()
+```
+
+#### <a id="server-methods-addRPCs">:addRPCs(t)</a>
+add or override remote procedure call functions
+```lua
+server:addRPCs{
+  rpc_name = function(self, data)
+    -- process data
+  end
+}
+```
+
+#### <a id="server-methods-update">:update(dt)</a>
+check for and handle messages if last update was > updateRate seconds ago
+```lua
+server:update(deltaTime)
+```
+
+#### <a id="server-methods-sendRPC">:sendRPC(name, data, [clientId])</a>
+send remote procedure call to server<br>
+data will have `\r` and `\n` removed (used as message delimiter) - may change in future version
+```lua
+server:sendRPC('chat_msg', 'hello')
+```
+```lua
+server:sendRPC('kicked', nil, '127.0.0.1:12345')
+```
+
+#### <a id="server-methods-close">:close()</a>
+send disconnect rpc to server and close client sockets
+```lua
+client:close()
+```
 
 
 [nut]: #nut
 [nut-properties]: #nut-properties
 [nut-properties-logMessages]: #nut-properties-logMessages
 [nut-properties-logErrors]: #nut-properties-logErrors
+[nut-properties-VERSION]: #nut-properties-VERSION
 [nut-methods]: #nut-methods
 [nut-methods-log]: #nut-methods-log
 [nut-methods-logError]: #nut-methods-logError
@@ -191,8 +270,9 @@ rpcs - {}
 [server-properties-updateRate]: #server-properties-updateRate
 [server-properties-rpcs]: #server-properties-rpcs
 [server-methods]: #server-methods
-[server-methods-addRPCs]: #server-methods-addRPCs
+[server-methods-start]: #server-methods-start
 [server-methods-accept]: #server-methods-accept
+[server-methods-addRPCs]: #server-methods-addRPCs
 [server-methods-update]: #server-methods-update
 [server-methods-sendRPC]: #server-methods-sendRPC
 [server-methods-close]: #server-methods-close
