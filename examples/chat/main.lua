@@ -1,12 +1,11 @@
-package.path = '../../?.lua;love_nut/?.lua;' .. package.path
+-- remove if love_nut.lua is in current dir
+package.path = '../../?.lua;' .. package.path
 
 nut = require 'love_nut'
+nut.logMessages = true
 
 ssx = love.graphics.getWidth()
 ssy = love.graphics.getHeight()
-
-love.filesystem.setIdentity(love.window.getTitle())
-math.randomseed(love.timer.getTime())
 
 love.keyboard.setKeyRepeat(true)
 
@@ -15,21 +14,20 @@ fonts = {
 	f24 = love.graphics.newFont(24)
 }
 
+-- add to nut, any instances inherit
 nut.server:addRPCs{
-	chat_msg = function(self, data, clientid)
+	chat_msg = function(self, data, clientId)
 		self:sendRPC('chat_msg', data)
 	end,
-	-- override connect/disconnect
-	connect = function(self, data, clientid)
-		print('hit connect')
-		print(clientid .. ' connected')
-		self.clients[clientid] = {}
-		self:sendRPC('chat_msg', clientid .. ' connected')
+	connect = function(self, data, clientId)
+		print(clientId .. ' connected')
+		self:sendRPC('chat_msg', clientId .. ' connected')
 	end,
-	disconnect = function(self, data, clientid)
-		print(clientid .. ' disconnected')
-		self.clients[clientid] = nil
-		self:sendRPC('chat_msg', clientid .. ' disconnected')
+	-- override default disconnect
+	disconnect = function(self, data, clientId)
+		print(clientId .. ' disconnected')
+		self.clients[clientId] = nil
+		self:sendRPC('chat_msg', clientId .. ' disconnected')
 	end
 }
 
@@ -84,16 +82,19 @@ end
 function love.mousepressed(x, y, btn, isTouch)
 	if not client and y < ssy/3 then
 		server = nut.server()
+		server:start()
 		client = nut.client()
-		client:connect('localhost', 1357)
+		client:connect('127.0.0.1', 1357)
+		client:sendRPC('connect')
 	elseif not client and y < ssy*2/3 then
 		client = nut.client()
-		client:connect('localhost', 1357)
+		client:connect('127.0.0.1', 1357)
+		client:sendRPC('connect')
 	end
 end
 
 function love.draw()
-	love.graphics.setBackgroundColor(200, 200, 200)
+	love.graphics.setBackgroundColor(0.8, 0.8, 0.8)
 	local mx, my = love.mouse.getPosition()
 	if client then
 		love.graphics.setFont(fonts.f12)
@@ -105,20 +106,20 @@ function love.draw()
 		love.graphics.print(message .. cursor, 30, ssy*2/3)
 	else
 		if my < ssy/3 then
-			love.graphics.setColor(120, 180, 200)
+			love.graphics.setColor(0.5, 0.8, 0.7)
 		else
-			love.graphics.setColor(160, 180, 200)
+			love.graphics.setColor(0.6, 0.7, 0.8)
 		end
 		love.graphics.rectangle('fill', 0, 0, ssx, ssy/3)
 		love.graphics.setColor(0, 0, 0)
 		love.graphics.setFont(fonts.f24)
 		local txt = 'Server'
 		love.graphics.print(txt, ssx/2 - fonts.f24:getWidth(txt)/2, ssy/6)
-		
+
 		if my > ssy/3 and my < ssy*2/3 then
-			love.graphics.setColor(120, 180, 200)
+			love.graphics.setColor(0.5, 0.7, 0.8)
 		else
-			love.graphics.setColor(160, 180, 200)
+			love.graphics.setColor(0.6, 0.7, 0.8)
 		end
 		love.graphics.rectangle('fill', 0, ssy/3, ssx, ssy/3)
 		love.graphics.setColor(0, 0, 0)
@@ -130,9 +131,10 @@ end
 
 function love.quit()
 	if client then
-		client:sendRPC('disconnect')
+		client:close()
 	end
 	if server then
 		server:sendRPC('closed')
+		server:close()
 	end
 end
