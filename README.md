@@ -87,15 +87,15 @@ nut = require 'love_nut'
 
 ### <a id="nut-properties"/> Properties
 #### <a id="nut-properties-logMessages">.logMessages</a>
-**default: false**<br>
+###### default: false<br>
 display logged messages
 
 #### <a id="nut-properties-logErrors">.logErrors</a>
-**default: true**<br>
+###### default: true<br>
 display logged errors
 
 #### <a id="nut-properties-VERSION">.\_VERSION</a>
-**"LoveNUT 0.1.0"**<br>
+###### "LoveNUT 0.1.0"<br>
 constant with current LoveNUT version
 
 ### <a id="nut-methods"/> Methods
@@ -127,11 +127,11 @@ client = nut.client{updateRate=1/20}
 
 ### <a id="client-properties"/> Properties
 #### <a id="client-properties-updateRate">updateRate</a>
-**default: 1/20**<br>
+###### default: 1/20<br>
 set client update rate
 
 #### <a id="client-properties-rpcs">rpcs</a>
-**default: {}**<br>
+###### default: {}<br>
 table of rpcs - use :addRPCs(t)
 
 ### <a id="client-methods"/> Methods
@@ -180,15 +180,15 @@ server = nut.server{port=1357, updateRate=1/20}
 
 ### <a id="server-properties"/> Properties
 #### <a id="server-properties-port">port</a>
-**default: 1357**<br>
+###### default: 1357<br>
 port to run on - set before starting server or when creating
 
 #### <a id="server-properties-updateRate">updateRate</a>
-**default: 1/20**<br>
+###### default: 1/20<br>
 set client update rate
 
 #### <a id="server-properties-rpcs">rpcs</a>
-**default:**<br>
+###### default:<br>
 ```lua
 {
     disconnect = function(self, data, clientId)
