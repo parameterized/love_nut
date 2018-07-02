@@ -14,36 +14,45 @@ fonts = {
 	f24 = love.graphics.newFont(24)
 }
 
--- add to nut, any instances inherit
-nut.server:addRPCs{
-	chat_msg = function(self, data, clientId)
-		self:sendRPC('chat_msg', data)
-	end,
-	connect = function(self, data, clientId)
-		print(clientId .. ' connected')
-		self:sendRPC('chat_msg', clientId .. ' connected')
-	end,
-	-- override default disconnect
-	disconnect = function(self, data, clientId)
-		print(clientId .. ' disconnected')
-		self.clients[clientId] = nil
-		self:sendRPC('chat_msg', clientId .. ' disconnected')
-	end
-}
-
-nut.client:addRPCs{
-	chat_msg = function(self, data)
-		chat = chat .. data .. '\n'
-	end,
-	closed = function(self, data)
-		chat = chat .. 'Server Closed'
-	end
-}
-
 function love.load()
 	chat = '--Chat:\n'
 	message = ''
 	typing = false
+end
+
+function startServer()
+	server = nut.server()
+	server:addRPCs{
+		chat_msg = function(self, data, clientId)
+			self:sendRPC('chat_msg', data)
+		end,
+		-- override default connect/disconnect (include default code)
+		connect = function(self, data, clientId)
+			self:sendRPC('chat_msg', clientId .. ' connected')
+
+			nut.log(clientId .. ' connected')
+		end,
+		disconnect = function(self, data, clientId)
+			self:sendRPC('chat_msg', clientId .. ' disconnected')
+
+			self.clients[clientId] = nil
+			nut.log(clientId .. ' disconnected')
+		end
+	}
+	server:start()
+end
+
+function startClient()
+	client = nut.client()
+	client:addRPCs{
+		chat_msg = function(self, data)
+			chat = chat .. data .. '\n'
+		end,
+		closed = function(self, data)
+			chat = chat .. 'Server Closed'
+		end
+	}
+	client:connect('127.0.0.1', 1357)
 end
 
 function love.update(dt)
@@ -81,15 +90,10 @@ end
 
 function love.mousepressed(x, y, btn, isTouch)
 	if not client and y < ssy/3 then
-		server = nut.server()
-		server:start()
-		client = nut.client()
-		client:connect('127.0.0.1', 1357)
-		client:sendRPC('connect')
+		startServer()
+		startClient()
 	elseif not client and y < ssy*2/3 then
-		client = nut.client()
-		client:connect('127.0.0.1', 1357)
-		client:sendRPC('connect')
+		startClient()
 	end
 end
 

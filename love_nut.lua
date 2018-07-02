@@ -1,10 +1,11 @@
 
 local socket = require 'socket'
+local http = require 'socket.http'
 
 local nut = {
     logMessages = false,
     logErrors = true,
-    _VERSION = 'LoveNUT 0.1.0'
+    _VERSION = 'LoveNUT 0.1.1'
 }
 
 function nut.log(msg)
@@ -15,8 +16,12 @@ function nut.logError(err)
     if nut.logErrors then print(err) end
 end
 
--- local ip
 function nut.getIP()
+    local res = http.request('http://myip.dnsomatic.com/')
+    return res
+end
+
+function nut.getLocalIP()
     local s = socket.udp()
     s:setpeername('8.8.8.8', 80)
     local ip, port = s:getsockname()
@@ -26,13 +31,13 @@ end
 
 local client = {}
 
-client.rpcs = {}
-
 function client:new(o)
     o = o or {}
     setmetatable(o, self)
     self.__index = self
     local defaults = {updateRate=1/20}
+    defaults.rpcs = {}
+    defaults.updates = {}
     for k, v in pairs(defaults) do
         if not o[k] then o[k] = v end
     end
@@ -69,6 +74,10 @@ function client:addRPCs(t)
     end
 end
 
+function client:addUpdate(f)
+    table.insert(self.updates, f)
+end
+
 function client:update(dt)
     self.updateTimer = self.updateTimer + dt
     if self.updateTimer > self.updateRate then
@@ -79,7 +88,7 @@ function client:update(dt)
                 if data then
                     nut.log('client received udp: ' .. data)
                     -- todo: handle
-                elseif not (msg == 'timeout') then
+                elseif msg ~= 'timeout' then
                     nut.logError('client udp recv err: ' .. tostring(msg))
                 end
             until not data
@@ -88,16 +97,14 @@ function client:update(dt)
                 if data then
                     nut.log('client received tcp: ' .. data)
                     local rpcName, rpcData = data:match('^(%S*) (.*)$')
-                    local rpc = self.rpcs[rpcName]
-                    if rpc then
-                        rpc(self, rpcData)
-                    else
-                        nut.logError('client rpc "' .. rpcName .. '" not found')
-                    end
-                elseif not (msg == 'timeout') then
+                    self:callRPC(rpcName, rpcData)
+                elseif msg ~= 'timeout' then
                     nut.logError('client tcp recv err: ' .. tostring(msg))
                 end
             until not data
+            for _, v in pairs(self.updates) do
+                v(self)
+            end
         end
     end
 end
@@ -111,9 +118,21 @@ function client:sendRPC(name, data)
     return self.tcp:send(dg)
 end
 
+function client:callRPC(name, data)
+    local rpc = self.rpcs[name]
+    if rpc then
+        rpc(self, data)
+    else
+        nut.logError('client rpc "' .. tostring(name) .. '" not found')
+    end
+end
+
 function client:close()
     self:sendRPC('disconnect')
+    socket.sleep(0.1) -- todo: not good solution
+    self.udp:close()
     self.tcp:close()
+    client.connected = false
 end
 
 setmetatable(client, {__call = function(_, ...) return client:new(...) end})
@@ -121,18 +140,21 @@ setmetatable(client, {__call = function(_, ...) return client:new(...) end})
 
 local server = {}
 
-server.rpcs = {
-    disconnect = function(self, data, clientId)
-        self.clients[clientId] = nil
-        nut.log(clientId .. ' disconnected')
-    end
-}
-
 function server:new(o)
     o = o or {}
     setmetatable(o, self)
     self.__index = self
-    local defaults = {port=1357, updateRate=1/20}
+    local defaults = {port=1357, updateRate=1/20, connectionLimit=nil}
+    defaults.rpcs = {
+        connect = function(self, data, clientId)
+            nut.log(clientId .. ' connected')
+        end,
+        disconnect = function(self, data, clientId)
+            self.clients[clientId] = nil
+            nut.log(clientId .. ' disconnected')
+        end
+    }
+    defaults.updates = {}
     for k, v in pairs(defaults) do
         if not o[k] then o[k] = v end
     end
@@ -153,13 +175,16 @@ function server:start()
     self.tcp:listen(5)
     self.clients = {}
     nut.log('started server')
-    --nut.log('hosting on ' .. nut.getIP() .. ':' .. o.port)
 end
 
 function server:addRPCs(t)
     for name, rpc in pairs(t) do
         self.rpcs[name] = rpc
     end
+end
+
+function server:addUpdate(f)
+    table.insert(self.updates, f)
 end
 
 function server:accept()
@@ -176,8 +201,11 @@ function server:accept()
         else
             self.clients[clientId] = {tcp=sock}
         end
-        nut.log('server accepted ' .. clientId)
-    elseif not (msg == 'timeout') then
+        local rpc = self.rpcs.connect
+        if rpc then
+            rpc(self, '$', clientId)
+        end
+    elseif msg ~= 'timeout' then
         nut.logError('server tcp accept err: ' .. tostring(msg))
     end
     return sock, msg
@@ -188,7 +216,16 @@ function server:update(dt)
     if self.updateTimer > self.updateRate then
         self.updateTimer = self.updateTimer - self.updateRate
         repeat
-            sock = self:accept()
+            local sock
+            if self.connectionLimit then
+                local ctr = 0
+                for _, _ in pairs(self.clients) do ctr = ctr + 1 end
+                if ctr < self.connectionLimit then
+                    sock = self:accept()
+                end
+            else
+                sock = self:accept()
+            end
         until not sock
         repeat
             local data, msg_or_ip, port_or_nil = self.udp:receivefrom()
@@ -196,7 +233,7 @@ function server:update(dt)
                 local ip, port = msg_or_ip, port_or_nil
                 nut.log('server received udp: ' .. data)
                 local clientid = ip .. ':' .. tostring(port)
-            elseif not (msg_or_ip == 'timeout') then
+            elseif msg_or_ip ~= 'timeout' then
                 nut.logError('server udp recv err: ' .. tostring(msg_or_ip))
             end
         until not data
@@ -206,16 +243,14 @@ function server:update(dt)
                 if data then
                     nut.log('server received tcp: ' .. data)
                     local rpcName, rpcData = data:match('^(%S*) (.*)$')
-                    local rpc = self.rpcs[rpcName]
-                    if rpc then
-                        rpc(self, rpcData, clientId)
-                    else
-                        nut.logError('server rpc "' .. rpcName .. '" not found')
-                    end
-                elseif not (msg == 'timeout') then
+                    self:callRPC(rpcName, rpcData, clientId)
+                elseif msg ~= 'timeout' then
                     nut.logError('server tcp recv err: ' .. tostring(msg_or_ip))
                 end
             until not data
+        end
+        for _, v in pairs(self.updates) do
+            v(self)
         end
     end
 end
@@ -239,7 +274,17 @@ function server:sendRPC(name, data, clientId)
     end
 end
 
+function server:callRPC(name, data, clientId)
+    local rpc = self.rpcs[name]
+    if rpc then
+        rpc(self, data, clientId)
+    else
+        nut.logError('server rpc "' .. tostring(name) .. '" not found')
+    end
+end
+
 function server:close()
+    self.udp:close()
     self.tcp:close()
 end
 
